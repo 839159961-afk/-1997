@@ -7,6 +7,7 @@ import PetCard from './Pet';
 import TaskCard from './TaskCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { Coins, Banknote, Trophy, History, Plus, Camera, Mic, Check, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ChildEndProps {
   user: User;
@@ -60,33 +61,93 @@ export default function ChildEnd({ user }: ChildEndProps) {
       setCheckins(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checkin)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'checkins'));
 
+    // Status Decay Logic (Simulated every 30 seconds)
+    const decayPetStatus = async () => {
+      if (!pet) return;
+      const petRef = doc(db, 'pets', pet.id);
+      try {
+        await updateDoc(petRef, {
+          hunger: Math.max(0, (pet.hunger || 100) - 2),
+          cleanliness: Math.max(0, (pet.cleanliness || 100) - 1),
+          happiness: Math.max(0, (pet.happiness || 100) - 1),
+        });
+      } catch (err) {
+        console.error('Decay error:', err);
+      }
+    };
+    
+    const decayInterval = setInterval(decayPetStatus, 30000);
+
     return () => {
       unsubscribePet();
       unsubscribeTasks();
       unsubscribeCheckins();
+      clearInterval(decayInterval);
     };
   }, [user.uid, user.parentId]);
 
   const handleInteract = async (type: 'feed' | 'clean' | 'play' | 'heal') => {
     if (!pet) return;
+    
+    const COST = 5;
+    if (user.balance < COST) {
+      toast.error('金币不足哦，快去完成任务赚取金币吧！');
+      return;
+    }
+
     const petRef = doc(db, 'pets', pet.id);
+    const userRef = doc(db, 'users', user.uid);
     const updates: Partial<Pet> = {};
+    let message = '';
     
     switch (type) {
-      case 'feed': updates.hunger = Math.min(100, (pet.hunger || 0) + 20); break;
-      case 'clean': updates.cleanliness = Math.min(100, (pet.cleanliness || 0) + 20); break;
-      case 'play': updates.happiness = Math.min(100, (pet.happiness || 0) + 20); break;
-      case 'heal': updates.health = Math.min(100, (pet.health || 0) + 20); break;
+      case 'feed': 
+        updates.hunger = Math.min(100, (pet.hunger || 0) + 20); 
+        message = '真好吃！谢谢小主人！';
+        break;
+      case 'clean': 
+        updates.cleanliness = Math.min(100, (pet.cleanliness || 0) + 20); 
+        message = '洗澡澡，真舒服！';
+        break;
+      case 'play': 
+        updates.happiness = Math.min(100, (pet.happiness || 0) + 20); 
+        message = '太开心啦！我们再玩一会吧！';
+        break;
+      case 'heal': 
+        updates.health = Math.min(100, (pet.health || 0) + 20); 
+        message = '感觉好多了，谢谢你！';
+        break;
     }
     
-    updates.growth = Math.min(1000, (pet.growth || 0) + 5);
-    if (updates.growth >= 1000) {
+    updates.growth = (pet.growth || 0) + 10;
+    let levelUp = false;
+    if (updates.growth >= 100) {
       updates.level = (pet.level || 1) + 1;
-      updates.growth = 0;
+      updates.growth = updates.growth % 100;
+      levelUp = true;
     }
 
     try {
       await updateDoc(petRef, updates);
+      await updateDoc(userRef, {
+        balance: user.balance - COST
+      });
+      
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        amount: -COST,
+        type: 'coin',
+        description: `照顾宠物：${type === 'feed' ? '喂食' : type === 'clean' ? '洗澡' : type === 'play' ? '玩耍' : '看病'}`,
+        timestamp: serverTimestamp(),
+      });
+
+      toast.success(message);
+      if (levelUp) {
+        toast.success(`哇！${pet.name} 升级到 LV.${updates.level} 啦！`, {
+          icon: '🎉',
+          duration: 5000,
+        });
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `pets/${pet.id}`);
     }

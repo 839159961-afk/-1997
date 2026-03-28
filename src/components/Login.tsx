@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { User, UserRole } from '../types';
-import { motion, AnimatePresence } from 'motion/react';
-import { User as UserIcon, ShieldCheck, Key, UserPlus, Info, Sparkles } from 'lucide-react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { User } from '../types';
+import { motion } from 'motion/react';
+import { User as UserIcon, Key, Info, Sparkles } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -13,13 +13,9 @@ interface LoginProps {
 export default function Login({ onLogin }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [role, setRole] = useState<UserRole>('parent');
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
 
   const generateInviteCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -28,11 +24,6 @@ export default function Login({ onLogin }: LoginProps) {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) return;
-    if (mode === 'register' && !displayName) return;
-    if (mode === 'register' && role === 'child' && !inviteCode) {
-      setError('小朋友注册需要家长的邀请码哦');
-      return;
-    }
 
     setLoading(true);
     setError(null);
@@ -40,57 +31,17 @@ export default function Login({ onLogin }: LoginProps) {
     const email = `${username.trim().toLowerCase()}@app.local`;
 
     try {
-      if (mode === 'login') {
-        const result = await signInWithEmailAndPassword(auth, email, password);
-        const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-        if (userDoc.exists()) {
-          onLogin(userDoc.data() as User);
-        } else {
-          setError('用户数据不存在');
-        }
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+      if (userDoc.exists()) {
+        onLogin(userDoc.data() as User);
       } else {
-        // Registration
-        const result = await createUserWithEmailAndPassword(auth, email, password);
-        
-        let parentId = undefined;
-        if (role === 'child') {
-          try {
-            const q = query(collection(db, 'users'), where('inviteCode', '==', inviteCode.toUpperCase()));
-            const querySnapshot = await getDocs(q);
-            if (querySnapshot.empty) {
-              await result.user.delete();
-              setError('无效的邀请码');
-              setLoading(false);
-              return;
-            }
-            parentId = querySnapshot.docs[0].id;
-          } catch (err: any) {
-            await result.user.delete();
-            throw err;
-          }
-        }
-
-        const newUser: User = {
-          uid: result.user.uid,
-          username: username.trim().toLowerCase(),
-          displayName: displayName.trim(),
-          role: role,
-          parentId: parentId,
-          inviteCode: role === 'parent' ? generateInviteCode() : undefined,
-          balance: 0,
-          pocketMoney: 0,
-          avatar: `https://picsum.photos/seed/${result.user.uid}/200/200`,
-        };
-
-        await setDoc(doc(db, 'users', result.user.uid), newUser);
-        onLogin(newUser);
+        setError('用户数据不存在');
       }
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setError('用户名或密码错误');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setError('用户名已存在');
       } else {
         setError(err.message);
       }
@@ -176,43 +127,7 @@ export default function Login({ onLogin }: LoginProps) {
         </div>
 
         <div className="p-8">
-          <div className="flex bg-gray-100 rounded-2xl p-1 mb-8">
-            <button
-              onClick={() => setMode('login')}
-              className={`flex-1 py-3 rounded-xl text-sm font-black transition-all ${mode === 'login' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400'}`}
-            >
-              登录
-            </button>
-            <button
-              onClick={() => setMode('register')}
-              className={`flex-1 py-3 rounded-xl text-sm font-black transition-all ${mode === 'register' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400'}`}
-            >
-              注册
-            </button>
-          </div>
-
           <form onSubmit={handleAuth} className="space-y-4">
-            {mode === 'register' && (
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                <button
-                  type="button"
-                  onClick={() => setRole('parent')}
-                  className={`py-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${role === 'parent' ? 'border-orange-600 bg-orange-50 text-orange-600' : 'border-gray-100 text-gray-400'}`}
-                >
-                  <ShieldCheck className="w-6 h-6" />
-                  <span className="text-xs font-black">我是家长</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('child')}
-                  className={`py-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${role === 'child' ? 'border-orange-600 bg-orange-50 text-orange-600' : 'border-gray-100 text-gray-400'}`}
-                >
-                  <UserIcon className="w-6 h-6" />
-                  <span className="text-xs font-black">我是小朋友</span>
-                </button>
-              </div>
-            )}
-
             <div className="space-y-4">
               <div className="relative">
                 <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -225,19 +140,6 @@ export default function Login({ onLogin }: LoginProps) {
                 />
               </div>
 
-              {mode === 'register' && (
-                <div className="relative">
-                  <UserPlus className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="显示昵称"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full bg-gray-50 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold border-2 border-transparent focus:border-orange-200 outline-none transition-all"
-                  />
-                </div>
-              )}
-
               <div className="relative">
                 <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -248,19 +150,6 @@ export default function Login({ onLogin }: LoginProps) {
                   className="w-full bg-gray-50 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold border-2 border-transparent focus:border-orange-200 outline-none transition-all"
                 />
               </div>
-
-              {mode === 'register' && role === 'child' && (
-                <div className="relative">
-                  <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-400" />
-                  <input
-                    type="text"
-                    placeholder="家长邀请码"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value)}
-                    className="w-full bg-orange-50 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold border-2 border-orange-100 focus:border-orange-300 outline-none transition-all"
-                  />
-                </div>
-              )}
             </div>
 
             {error && (
@@ -282,7 +171,7 @@ export default function Login({ onLogin }: LoginProps) {
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <span>{mode === 'login' ? '立即登录' : '创建账号'}</span>
+                <span>立即登录</span>
               )}
             </button>
           </form>

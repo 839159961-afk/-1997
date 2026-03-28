@@ -170,19 +170,19 @@ export default function ParentEnd({ user }: ParentEndProps) {
           </div>
         </div>
 
-        {/* Invite Code Card */}
+        {/* Quick Actions */}
         <div className="bg-blue-600 p-6 rounded-[32px] text-white shadow-xl shadow-blue-100 relative overflow-hidden">
           <div className="absolute top-[-20px] right-[-20px] w-32 h-32 bg-white/10 rounded-full blur-2xl" />
           <div className="relative z-10 flex items-center justify-between">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-1">您的专属邀请码</p>
-              <p className="text-3xl font-black tracking-widest">{user.inviteCode || '---'}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-1">快速添加孩子</p>
+              <p className="text-xl font-black">点击右下角按钮直接创建</p>
             </div>
             <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-md">
               <Sparkles className="w-6 h-6" />
             </div>
           </div>
-          <p className="text-[10px] font-bold mt-4 opacity-80">让孩子在注册时输入此代码即可自动绑定</p>
+          <p className="text-[10px] font-bold mt-4 opacity-80">无需注册，由家长直接为孩子创建登录账号</p>
         </div>
 
         {/* Navigation Tabs */}
