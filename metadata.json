@@ -1,0 +1,5 @@
+{
+  "name": "萌宠养成记",
+  "description": "儿童习惯打卡 + 零花钱激励，真实生活行为打卡→养成虚拟萌宠→赚取真实零花钱。",
+  "requestFramePermissions": ["camera", "microphone"]
+}
